@@ -4,18 +4,21 @@ import cmd = require('child_process');
 interface Disk {
     path: string;
     description: string;
+    partitions: { [id: string]: Partition };
 }
 
 interface Partition {
-    ID: string;
-    TYPE: string;
-    NAME: string;
-    SIZE: string;
-    IDENTIFIER: string;
+    id: string;
+    type: string;
+    name: string;
+    size: string;
+    identifier: string;
+    mounted?:boolean;
+    mount_path?:string;
 }
 
 
-function parse_diskutil(stdout:string){
+function parse_diskutil(stdout:string):Disk[]{
     let res = stdout.split(/\n\n/).slice(0,-1);
     let disks = res.map((entry)=>{
         let lines = entry.split(/\n/);
@@ -24,7 +27,8 @@ function parse_diskutil(stdout:string){
         
         let disk: Disk = {
             path: diskinfo[1],
-            description: diskinfo[2].slice(0,-1)
+            description: diskinfo[2].slice(0,-1),
+            partitions: {}
         }
 
         let deviders = []
@@ -35,37 +39,32 @@ function parse_diskutil(stdout:string){
         deviders.push(lines[0].search("IDENTIFIER")-1);
         deviders.push(lines[0].length);
         
-        let columns = ["ID", "TYPE", "NAME", "SIZE", "IDENTIFIER"]
+        let columns = ["id", "type", "name", "size", "identifier"]
         
-        let partitions:{[id:string]:Partition} = {}
         let last_partition = ""
         lines.slice(1).forEach((line)=>{
-            let partition: Partition = { ID: "", TYPE: "", NAME: "", SIZE: "", IDENTIFIER: "" }
+            let partition: Partition = { id: "", type: "", name: "", size: "", identifier: "" }
             columns.forEach((column,index)=>{
                 partition[column] = line.slice(deviders[index],deviders[index+1]).trim()
             })            
-            if(partition.ID === "" && last_partition !==""){
-                partitions[last_partition].NAME = partition.NAME;
+            if(partition.id === "" && last_partition !==""){
+                disk.partitions[last_partition].name = partition.name;
             }
             else{
-                if(partition.ID.endsWith(":")){
-                    partition.ID=partition.ID.slice(0,partition.ID.length-1);
+                if(partition.id.endsWith(":")){
+                    partition.id=partition.id.slice(0,partition.id.length-1);
                 }
-                last_partition = partition.ID;
-                partitions[partition.ID]=partition;
+                last_partition = partition.id;
+                disk.partitions[partition.id]=partition;
             }
         })
-        return {
-            disk,
-            partitions
-        }
+        return disk
     });
 
     return disks;
 }
 
-function update_mount_info(){
-    
+function update_mount_info(disks:Disk[]){
 }
 
 cmd.exec("diskutil list", (_,stdout,_stderr)=>{
