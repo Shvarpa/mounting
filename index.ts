@@ -2,16 +2,16 @@ import fs = require("fs")
 import cmd = require('child_process');
 
 interface Disk {
-    path: String;
-    description: String;
+    path: string;
+    description: string;
 }
 
 interface Partition {
-    ID: String;
-    TYPE: String;
-    NAME: String;
-    SIZE: String;
-    IDENTIFIER: String;
+    ID: string;
+    TYPE: string;
+    NAME: string;
+    SIZE: string;
+    IDENTIFIER: string;
 }
 
 
@@ -37,20 +37,22 @@ function parse_diskutil(stdout:string){
         
         let columns = ["ID", "TYPE", "NAME", "SIZE", "IDENTIFIER"]
         
-        let partitions:Array<Partition> = []
+        let partitions:{[id:string]:Partition} = {}
+        let last_partition = ""
         lines.slice(1).forEach((line)=>{
             let partition: Partition = { ID: "", TYPE: "", NAME: "", SIZE: "", IDENTIFIER: "" }
             columns.forEach((column,index)=>{
                 partition[column] = line.slice(deviders[index],deviders[index+1]).trim()
             })            
-            if(partition.ID === ""){
-                partitions[partitions.length-1].NAME = partition.NAME;
+            if(partition.ID === "" && last_partition !==""){
+                partitions[last_partition].NAME = partition.NAME;
             }
             else{
                 if(partition.ID.endsWith(":")){
                     partition.ID=partition.ID.slice(0,partition.ID.length-1);
                 }
-                partitions.push(partition);
+                last_partition = partition.ID;
+                partitions[partition.ID]=partition;
             }
         })
         return {
@@ -62,6 +64,9 @@ function parse_diskutil(stdout:string){
     return disks;
 }
 
+function update_mount_info(){
+    
+}
 
 cmd.exec("diskutil list", (_,stdout,_stderr)=>{
     let disks = parse_diskutil(stdout);
