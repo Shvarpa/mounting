@@ -166,14 +166,6 @@ async function list_disks(){
     return parse_diskutil(stdout);    
 }
 
-async function main(){
-    let disks = await list_disks();
-    await update_mount_info(disks[3].partitions["1"]);    
-    await mount_partition(disks[3].partitions["1"])
-    console.log(disks[3].partitions["1"]);
-    await setTimeout(()=>{},1000)
-    unmount(disks[3].partitions["1"])
-}
 
 async function unmount(partition: Partition){
     if(partition.mounted){
@@ -187,5 +179,21 @@ async function unmount(partition: Partition){
         }
     }    
 }
+
+async function main(){
+    let disks = await list_disks();
+    let partition = disks[3].partitions["1"];
+    await update_mount_info(partition);
+    if(partition.mounted){
+        await unmount(partition)
+    }
+    else{
+        await mount_partition(partition)
+    }
+    console.log(partition);
+}
+
+// if(process.argv[process.argv.length-1]=="1"){
+// }
 
 main();

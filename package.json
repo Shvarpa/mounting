@@ -1,17 +1,31 @@
 {
   "name": "mounter",
   "version": "1.0.0",
-  "main": "index.ts",
+  "main": "src/index.ts",
   "license": "MIT",
   "scripts": {
-    "start": "ts-node ."
+    "build": "webpack -p",
+    "start": "webpack && qode ./dist/index.js",
+    "debug": "webpack && qode --inspect ./dist/index.js",
+    "start:watch": "nodemon -e js,ts,tsx --ignore dist/ --ignore node_modules/ --exec npm start"
   },
   "devDependencies": {
     "@types/node": "^12.7.5",
+    "@types/react": "^16.9.2",
+    "file-loader": "^4.2.0",
+    "node-loader": "^0.6.0",
+    "nodemon": "^1.19.2",
+    "ts-loader": "^6.1.0",
     "ts-node": "^8.3.0",
-    "typescript": "^3.6.3"
+    "typescript": "^3.6.3",
+    "webpack": "^4.40.2",
+    "webpack-cli": "^3.3.8"
   },
   "dependencies": {
+    "@nodegui/nodegui": "^0.1.9",
+    "@nodegui/qode": "^1.0.5",
+    "@nodegui/react-nodegui": "^0.1.9",
+    "react": "^16.9.0",
     "sudo-prompt": "^9.0.0"
   }
 }
