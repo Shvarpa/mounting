@@ -1,19 +1,27 @@
 import '../assets/css/App.css'
-import React, { Component } from 'react'
+import React, { useState, useEffect } from 'react'
+import { list_disks } from "./commands"
+import Disk from "./Disk"
 
 import url from "../assets/images/electron-react-webpack-boilerplate.png"
-class App extends React.Component {
-  render() {
-    return (
-      <div>
-        <h1>Hello, Electron!</h1>
 
-        <p>I hope you enjoy using basic-electron-react-boilerplate to start your dev off right!</p>
+const App = (props) => {
+  const [disks, setDisks] = useState([{path:"",description:"",partitions:{}}])
 
-        <img src={url} width="100%"/>
-      </div>
-    )
+  const update = async () => {
+    let x = await list_disks();
+    console.log(x);
+    setDisks(x)
   }
+
+  useEffect(()=>{update()},[])
+
+  return (
+    <div>
+      <h1>Hello, Electron!</h1>
+      { disks.map((disk)=><Disk {...disk}/>) }
+    </div>
+  )
 }
 
 export default App

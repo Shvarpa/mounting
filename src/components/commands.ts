@@ -7,24 +7,7 @@ const asyncSudoExec = util.promisify(sudo.exec)
 const asyncAccess = util.promisify(fs.access)
 // process.title = "mounter"
 
-interface Disk {
-    path: string;
-    description: string;
-    partitions: { [id: string]: Partition };
-}
-
-interface Partition {
-    id: string;
-    type: string;
-    name: string;
-    size: string;
-    identifier: string;
-    mounted?:boolean;
-    mount_path?:string;
-    filesystem?:string;
-    path?:string;
-    self_created?:boolean;
-}
+import { Disk, Partition } from "../types/Diskutil"
 
 
 function parse_diskutil(stdout:string):Disk[]{
@@ -121,7 +104,7 @@ function parse_diskutil_info(stdout):{
     return parsed;
 }
 
-async function update_mount_info(partition:Partition){
+export async function update_partition(partition:Partition){
     let {stdout} = await asyncExec(`diskutil info ${partition.identifier}`);
     let parsed = parse_diskutil_info(stdout)
     
@@ -141,7 +124,7 @@ async function file_exists(path:string){
     return ((await asyncExec(`test -e ${path} && echo 1 || echo 0`)).stdout.trim() == '1')
 }
 
-async function mount_partition(partition:Partition, mount_path=`/Users/pavel/Desktop/${partition.name}`){
+export async function mount_partition(partition:Partition, mount_path=`/Users/pavel/Desktop/${partition.name}`){
     if (!partition.mounted){
         if (!await file_exists(mount_path)) {
             console.log("~~~~~creating dir~~~~~~");
@@ -161,21 +144,21 @@ async function mount_partition(partition:Partition, mount_path=`/Users/pavel/Des
     }
 }
 
-async function list_disks(){
+export async function list_disks(){
     let { stdout } = await asyncExec("diskutil list")
     return parse_diskutil(stdout);    
 }
 
 async function main(){
     let disks = await list_disks();
-    await update_mount_info(disks[3].partitions["1"]);    
+    await update_partition(disks[3].partitions["1"]);    
     await mount_partition(disks[3].partitions["1"])
     console.log(disks[3].partitions["1"]);
     await setTimeout(()=>{},1000)
-    unmount(disks[3].partitions["1"])
+    unmount_partition(disks[3].partitions["1"])
 }
 
-async function unmount(partition: Partition){
+export async function unmount_partition(partition: Partition){
     if(partition.mounted){
         await asyncSudoExec(`diskutil umount ${partition.path}`,{name:"mounter"})
         console.log(`unmounted ${partition.path}`);
@@ -188,4 +171,11 @@ async function unmount(partition: Partition){
     }    
 }
 
-main();
+export default {
+    list_disks,
+    update_partition,
+    mount_partition,
+    unmount_partition
+}
+
+// main();
