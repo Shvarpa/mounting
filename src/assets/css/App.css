@@ -1,3 +1,11 @@
 /* Main CSS file */
 
-@import '_example/_example.css';
+/* @import '_example/_example.css'; */
+
+h1 {
+    font-family: Georgia, 'Times New Roman', Times, serif;
+    font-size: 2em;
+}
+.grid {
+    display: grid;
+}

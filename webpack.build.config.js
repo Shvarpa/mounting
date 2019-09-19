@@ -11,12 +11,12 @@ module.exports = {
     rules: [
       {
         test: /\.css$/i,
-        use: [ 'css-loader' ],
+        use: [ "style-loader", "css-loader" ],
         include: defaultInclude
       },
       {
         test: /\.[jt]sx?$/,
-        use: "ts-loader",
+        use: [ "ts-loader" ],
         include: defaultInclude
       },
       {
