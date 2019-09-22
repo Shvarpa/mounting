@@ -11,7 +11,12 @@ module.exports = {
     rules: [
       {
         test: /\.css$/i,
-        use: [ "style-loader", "css-loader" ],
+        use: [ "style-loader", "css-loader"],
+        include: defaultInclude
+      },
+      {
+        test: /\.s[ac]ss$/i,
+        use: [ "style-loader", "css-loader", "sass-loader"],
         include: defaultInclude
       },
       {
@@ -38,7 +43,7 @@ module.exports = {
   },
   target: 'electron-renderer',
   plugins: [
-    new HtmlWebpackPlugin(),
+    new HtmlWebpackPlugin(require("./src/template/html-webpack-template")),
   //   new webpack.DefinePlugin({
   //     'process.env.NODE_ENV': JSON.stringify('development')
   //   })

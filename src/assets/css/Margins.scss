@@ -1,0 +1,13 @@
+$jump : 0.25;
+$sides: (top, bottom, left, right); // Leave this variable alone
+
+@for $i from 1 through 4 {
+  @each $side in $sides {
+    .m-#{str-slice($side,0,1)-#{$i}} {   
+      margin-#{$side}: #{$i*$jump}rem !important;
+    }
+    .p-#{str-slice($side,0,1)-#{$i}} {   
+      padding-#{$side}: #{$i*$jump}rem !important;
+    }
+  }
+}

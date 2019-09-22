@@ -1,4 +1,4 @@
-import '../assets/css/App.css'
+import '../assets/css/App.scss'
 import React, { useState, useEffect } from 'react'
 import { list_disks, update_partition } from "./commands"
 import Disk from "./Disk"
@@ -26,12 +26,12 @@ const App = (props) => {
   useEffect(()=>{startup()},[])
 
   return (
-    <>
-      <h1>Hello, Electron!</h1>
-      <div className={"grid"}>
+    <div className="section">
+      <h1 className="title has-text-centered">Hello, Electron!</h1>
+      <div className="columns is-multiline">
       { disks.map((disk)=><Disk key={disk.path} {...disk}/>) }
       </div>
-    </>
+    </div>
   )
 }
 

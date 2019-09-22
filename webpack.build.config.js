@@ -15,6 +15,11 @@ module.exports = {
         include: defaultInclude
       },
       {
+        test: /\.s[ac]ss$/i,
+        use: [ "style-loader", "css-loader", "sass-loader"],
+        include: defaultInclude
+      },
+      {
         test: /\.[jt]sx?$/,
         use: [ "ts-loader" ],
         include: defaultInclude
@@ -38,7 +43,7 @@ module.exports = {
   },
   target: 'electron-renderer',
   plugins: [
-    new HtmlWebpackPlugin(),
+    new HtmlWebpackPlugin(require("./src/template/html-webpack-template")),
   //   new MiniCssExtractPlugin({
   //     // Options similar to the same options in webpackOptions.output
   //     // both options are optional
