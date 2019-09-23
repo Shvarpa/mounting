@@ -27,12 +27,7 @@ $primary-invert: $pink-invert;
 */
 
 // @import "../node_modules/bulma/bulma";
+
 @import "./Margins.scss";
+@import "./grid.css";
 @import "~bulma/bulma";
-// h1 {
-//     font-family: Georgia, 'Times New Roman', Times, serif;
-//     font-size: 2em;
-// }
-// .grid {
-//     display: grid;
-// }

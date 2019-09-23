@@ -1,0 +1,32 @@
+/* .grid {
+    display: grid;
+    grid-template: auto / repeat(3,1fr);
+    gap: 0.6em 0.5em
+} */
+
+.container {
+    display: flex;
+    flex-wrap: wrap;
+    box-sizing: border-box;
+  }
+  
+.flex-item {
+    width: 30%;
+    flex-grow: 1;
+    box-sizing: border-box;
+    margin: 0 0.5rem 0.5rem 0;
+    justify-content: space-between;
+    text-align: center;
+}
+
+.center {
+    justify-content: center;
+}
+
+.partition {
+    display: grid;
+    grid-template: auto / 80% 20%;
+    gap: 0.1em;
+    align-items: center;
+    text-align: start;
+}

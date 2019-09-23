@@ -1,6 +1,8 @@
-export interface Disk {
-    path: string;
+export interface Disk{
+    identifier: string;
     description: string;
+    size?:string;
+    name?:string;
     partitions: Partition[];
 }
 
@@ -10,20 +12,22 @@ export interface Partition {
     name?: string;
     size: string;
     identifier: string;
-    mounted?:boolean;
+    is_mounted?:boolean;
     mount_path?:string;
     filesystem?:string;
-    path?:string;
-    self_created?:boolean;
+    is_mount_path_self_created?:boolean;
 }
 
-export interface Partition_Info {
+export interface Diskutil_info {
     'Device Identifier'?:string;
     'Device Node'?:string;
     'Whole'?:boolean;
+    'Part of Whole'?: string;
+    'Device / Media Name'?:string;
     'Volume Name'?: string;
     'Mounted'?: boolean,
     'Mount Point'?: string,
+    'File System'?: string,
     'Partition Type'?: string,
     'File System Personality'?: string,
     'Type (Bundle)'?: string,

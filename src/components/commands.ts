@@ -7,7 +7,7 @@ const asyncSudoExec = util.promisify(sudo.exec)
 const asyncAccess = util.promisify(fs.access)
 // process.title = "mounter"
 
-import { Disk, Partition, Partition_Info } from "../types/Diskutil"
+import { Disk, Partition, Diskutil_info } from "../types/Diskutil"
 
 function parse_diskutil_list(stdout:string):Disk[]{
     let res = stdout.split(/\n\n/).slice(0,-1);
@@ -17,8 +17,10 @@ function parse_diskutil_list(stdout:string):Disk[]{
         // console.log("disk info:", diskinfo);
         
         let disk: Disk = {
-            path: diskinfo[1],
+            identifier: diskinfo[1],
             description: diskinfo[2].slice(0,-1),
+            size: undefined,
+            name: undefined,
             partitions: []
         }
 
@@ -45,20 +47,26 @@ function parse_diskutil_list(stdout:string):Disk[]{
                 disk.partitions[last_partition_index].name = partition.name;
             }
             else{
-                if(partition.id.endsWith(":")){
+                if(partition.id.endsWith(":"))
                     partition.id=partition.id.slice(0,partition.id.length-1);
-                }
+                if(partition.identifier) 
+                    partition.identifier = "/dev/" + partition.identifier;
                 last_partition_index = partition.id;
                 disk.partitions[partition.id]=partition;
             }
         })
+        if(disk.partitions.length >= 1 && disk.partitions[0].id == "0"){            
+            let disk_partition = disk.partitions.splice(0,1)[0]
+            disk.size = disk_partition.size.replace(/^[*+-\\]/,"");
+            disk.name = disk_partition.name;
+        }
         return disk
     });
 
     return disks;
 }
 
-function parse_diskutil_info(stdout):Partition_Info{
+function parse_diskutil_info(stdout):Diskutil_info{
     let parsed = {}
     stdout.split(/\n/).forEach(line => {
         let match = line.match(/(?<key>.*):(?<val>.*)/)
@@ -80,19 +88,40 @@ export async function update_partition(partition:Partition){
     let {stdout} = await asyncExec(`diskutil info ${partition.identifier}`);
     let parsed = parse_diskutil_info(stdout)
     
+    
     let combined:Partition = {...partition}
 
-    if(parsed["Mounted"]!==undefined){            
-        combined.mounted = parsed.Mounted;
-        combined.mount_path = (combined.mounted ? parsed["Mount Point"] : undefined)
+    const copy = (from:string, to:string, def=combined[to]) => {
+        combined[to] = parsed[from]!==undefined? parsed[from]: def;
     }
-    if(parsed['Type (Bundle)']!==undefined){
-        combined.filesystem = parsed['Type (Bundle)'];
-    }
-    if(parsed['Device Node']!==undefined){
-        combined.path = parsed['Device Node'];
-    }
+
+    if(!parsed["Volume Name"].match(/^[nN]ot/))
+        copy("Volume Name", "name");
+    copy("Mounted", "is_mounted")
+    copy("Mount Point", "mount_path")
+    copy("Type (Bundle)", "filesystem")
+    copy("Device Node", "identifier")
     
+    return combined
+}
+
+export async function update_disk(disk:Disk){
+    let {stdout} = await asyncExec(`diskutil info ${disk.identifier}`);
+    let parsed = parse_diskutil_info(stdout)
+    
+    
+    let combined:Disk = {...disk}
+
+    // const copy = (from:string, to:string, def=combined[to]) => {
+    //     let exist = parsed[from]!==undefined
+    //     combined[to] = exist? parsed[from]: def;
+    //     return exist;
+    // }
+
+    if(parsed["Disk Size"]!==undefined){
+        combined.size = parsed["Disk Size"].match(/(?<size>^.* [A-Z][Bb]) /).groups.size
+    }
+
     return combined
 }
 
@@ -101,7 +130,7 @@ async function file_exists(path:string){
 }
 
 export async function mount_partition(partition:Partition, mount_path=`/Users/pavel/Desktop/${partition.name}`){
-    if (!partition.mounted){
+    if (!partition.is_mounted){
         if (!await file_exists(mount_path)) {
             console.log("~~~~~creating dir~~~~~~");
             await asyncExec(`mkdir ${mount_path}`)
@@ -109,7 +138,7 @@ export async function mount_partition(partition:Partition, mount_path=`/Users/pa
         }
         console.log("~~~~~~~dirr_existsssssssss");
         
-        let { stdout, stderr } = await asyncSudoExec(`mount -t ${partition.filesystem} ${partition.path} ${mount_path}`,{name:"mounter"})
+        let { stdout, stderr } = await asyncSudoExec(`mount -t ${partition.filesystem} ${partition.identifier} ${mount_path}`,{name:"mounter"})
         if(stderr){
             console.log(stderr);
         }
@@ -136,23 +165,26 @@ async function main(){
 }
 
 export async function unmount_partition(partition: Partition){
-    if(partition.mounted){
-        await asyncSudoExec(`diskutil umount ${partition.path}`,{name:"mounter"})
-        console.log(`unmounted ${partition.path}`);
+    if(partition.is_mounted){
+        await asyncSudoExec(`diskutil umount ${partition.identifier}`,{name:"mounter"})
+        console.log(`unmounted ${partition.identifier}`);
         if(await file_exists(partition.mount_path)){
-            if(partition.self_created){
+            if(partition.is_mount_path_self_created){
                 console.log("removing path");
-                await asyncSudoExec(`rm -f ${partition.path}`,{name:"mounter"})
+                await asyncSudoExec(`rm -f ${partition.identifier}`,{name:"mounter"})
             }
         }
-        let res = { ...partition, self_created:false, mounted:false }
-        delete res.mount_path
+        let res:Partition = {...partition};
+        res = await update_partition(res)
+        // let res:Partition = { ...partition, mount_path_self_created:false, mounted:false }
+        // delete res.mount_path
         return res;
     }    
 }
 
 export default {
     list_disks,
+    update_disk,
     update_partition,
     mount_partition,
     unmount_partition
