@@ -129,7 +129,7 @@ async function file_exists(path:string){
     return ((await asyncExec(`test -e ${path} && echo 1 || echo 0`)).stdout.trim() == '1')
 }
 
-export async function mount_partition(partition:Partition, mount_path=`/Users/pavel/Desktop/${partition.name}`){
+export async function mount_partition(partition:Partition, mount_path=`/Users/pavel/Desktop/${partition.name}`):Promise<Partition>{
     if (!partition.is_mounted){
         if (!await file_exists(mount_path)) {
             console.log("~~~~~creating dir~~~~~~");
@@ -143,11 +143,8 @@ export async function mount_partition(partition:Partition, mount_path=`/Users/pa
             console.log(stderr);
         }
         console.log(stdout);
-        return {...partition, self_created:true, mounted:true, mount_path:true}
     }
-    else {
-        return {...partition}
-    }
+    return update_partition(partition)
 }
 
 export async function list_disks(){
@@ -175,11 +172,17 @@ export async function unmount_partition(partition: Partition){
             }
         }
         let res:Partition = {...partition};
-        res = await update_partition(res)
-        // let res:Partition = { ...partition, mount_path_self_created:false, mounted:false }
-        // delete res.mount_path
-        return res;
+        return await update_partition(res);
     }    
+}
+
+export async function toggle_mount_partition(partition:Partition){
+    if(partition.is_mounted){
+        return await unmount_partition(partition)
+    }
+    else {
+        return await mount_partition(partition)
+    }
 }
 
 export default {
@@ -187,7 +190,8 @@ export default {
     update_disk,
     update_partition,
     mount_partition,
-    unmount_partition
+    unmount_partition,
+    toggle_mount_partition
 }
 
 // main();

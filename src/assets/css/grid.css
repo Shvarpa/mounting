@@ -14,18 +14,15 @@
     width: 30%;
     flex-grow: 1;
     box-sizing: border-box;
+    min-width: fit-content;
     margin: 0 0.5rem 0.5rem 0;
     justify-content: space-between;
     text-align: center;
 }
 
-.center {
-    justify-content: center;
-}
-
 .partition {
     display: grid;
-    grid-template: auto / 80% 20%;
+    grid-template: auto / 3fr auto auto;
     gap: 0.1em;
     align-items: center;
     text-align: start;
