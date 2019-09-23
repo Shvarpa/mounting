@@ -129,24 +129,6 @@ async function file_exists(path:string){
     return ((await asyncExec(`test -e ${path} && echo 1 || echo 0`)).stdout.trim() == '1')
 }
 
-export async function mount_partition(partition:Partition, mount_path=`/Users/pavel/Desktop/${partition.name}`):Promise<Partition>{
-    if (!partition.is_mounted){
-        if (!await file_exists(mount_path)) {
-            console.log("~~~~~creating dir~~~~~~");
-            await asyncExec(`mkdir ${mount_path}`)
-            console.log("~~~~~created dirrrrrrr~~~~");
-        }
-        console.log("~~~~~~~dirr_existsssssssss");
-        
-        let { stdout, stderr } = await asyncSudoExec(`mount -t ${partition.filesystem} ${partition.identifier} ${mount_path}`,{name:"mounter"})
-        if(stderr){
-            console.log(stderr);
-        }
-        console.log(stdout);
-    }
-    return update_partition(partition)
-}
-
 export async function list_disks(){
     let { stdout } = await asyncExec("diskutil list")
     return parse_diskutil_list(stdout);    
@@ -161,19 +143,50 @@ async function main(){
     unmount_partition(disks[3].partitions[1])
 }
 
+export async function mount_partition(partition:Partition, mount_path:string=undefined):Promise<Partition>{
+    if(mount_path===undefined){
+        if(partition.name){
+            mount_path=`/Users/pavel/Desktop/Volumes/${partition.name}`
+        }
+        else {
+            mount_path=`/Users/pavel/Desktop/Volumes/${partition.identifier.match(/^(\/dev\/|)(?<name>.*)/).groups.name}`
+        }
+    }
+    if (!partition.is_mounted){
+        if (!await file_exists(mount_path)) {
+            await asyncExec(`mkdir -p ${mount_path}`)
+            console.log(`created ${mount_path}`);
+        }        
+        try{
+            await asyncSudoExec(`mount -t ${partition.filesystem} ${partition.identifier} ${mount_path}`,{name:"mounter"})
+            console.log(`mounted ${partition.identifier} in ${mount_path}`);
+        }
+        catch (err){
+            console.log(err);
+        }
+    }
+    return update_partition(partition)
+}
+
 export async function unmount_partition(partition: Partition){
     if(partition.is_mounted){
-        await asyncSudoExec(`diskutil umount ${partition.identifier}`,{name:"mounter"})
-        console.log(`unmounted ${partition.identifier}`);
-        if(await file_exists(partition.mount_path)){
-            if(partition.is_mount_path_self_created){
-                console.log("removing path");
-                await asyncSudoExec(`rm -f ${partition.identifier}`,{name:"mounter"})
+        try{
+            await asyncSudoExec(`diskutil umount ${partition.identifier}`,{name:"mounter"})
+            console.log(`unmounted ${partition.identifier}`);
+            if(await file_exists(partition.mount_path)){
+                if(partition.is_mount_path_self_created){
+                    console.log("removing path");
+                    await asyncSudoExec(`rm -f ${partition.identifier}`,{name:"mounter"})
+                }
             }
         }
-        let res:Partition = {...partition};
-        return await update_partition(res);
+        catch(err){
+            console.log(err);
+        }
+        return await update_partition(partition);
     }    
+    else
+        return partition;
 }
 
 export async function toggle_mount_partition(partition:Partition){

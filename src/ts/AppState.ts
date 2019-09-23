@@ -33,7 +33,7 @@ export default function(state:[Disk[], React.Dispatch<React.SetStateAction<Disk[
             new_disks[i].partitions[j] = await toggle_mount_partition(new_disks[i].partitions[j])
             setDisks(new_disks)
             // ${new_disks[i].partitions[j].is_mounted?"Mounted " : "unMounted "}
-            console.log(`toggled ${new_disks[i].partitions[j].identifier}`);
+            // console.log(`toggled ${new_disks[i].partitions[j].identifier}`);
         }
     }
 

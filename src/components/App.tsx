@@ -14,7 +14,7 @@ const App = (props) => {
 
   return (
     <div className="section">
-      <h1 className="title has-text-centered">Hello, Electron!</h1>
+      <h1 className="title has-text-centered">Mounter</h1>
       <div className="container">
       { disks.map((disk,disk_index)=><Disk key={disk.identifier} {...{...disk,actions,disk_index}}/>) }
       </div>
