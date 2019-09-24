@@ -1,4 +1,4 @@
-import '../assets/css/App.scss'
+import '../../assets/css/bulma.scss'
 import React, { useState, useEffect } from 'react'
 import Disk from "./Disk"
 
@@ -22,4 +22,4 @@ const App = (props) => {
   )
 }
 
-export default App
+export default module.exports = App

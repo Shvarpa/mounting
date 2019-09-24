@@ -7,7 +7,7 @@
 
 /*
 // 1. Import the initial variables
-@import "../node_modules/bulma/sass/utilities/initial-variables";
+@import "~/bulma/sass/utilities/initial-variables";
 
 // 2. Set your own initial variables
 // Update the blue shade, used for links
@@ -26,8 +26,6 @@ $primary-invert: $pink-invert;
 // 4. Import the rest of Bulma
 */
 
-// @import "../node_modules/bulma/bulma";
-
-@import "./Margins.scss";
-@import "./grid.css";
+@import "./margins";
+@import "./grid";
 @import "~bulma/bulma";

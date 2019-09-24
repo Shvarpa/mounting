@@ -3,8 +3,7 @@ import cmd = require('child_process');
 import util = require("util")
 import sudo = require("sudo-prompt")
 const asyncExec = util.promisify(cmd.exec)
-const asyncSudoExec = util.promisify(sudo.exec)
-const asyncAccess = util.promisify(fs.access)
+const asyncSudoExec = (command) => util.promisify(sudo.exec)(command,{name:"mounter"})
 // process.title = "mounter"
 
 import { Disk, Partition, Diskutil_info } from "../types/Diskutil"
@@ -158,7 +157,7 @@ export async function mount_partition(partition:Partition, mount_path:string=und
             console.log(`created ${mount_path}`);
         }        
         try{
-            await asyncSudoExec(`mount -t ${partition.filesystem} ${partition.identifier} ${mount_path}`,{name:"mounter"})
+            await asyncSudoExec(`mount -t ${partition.filesystem} ${partition.identifier} ${mount_path}`)
             console.log(`mounted ${partition.identifier} in ${mount_path}`);
         }
         catch (err){
@@ -171,12 +170,12 @@ export async function mount_partition(partition:Partition, mount_path:string=und
 export async function unmount_partition(partition: Partition){
     if(partition.is_mounted){
         try{
-            await asyncSudoExec(`diskutil umount ${partition.identifier}`,{name:"mounter"})
+            await asyncSudoExec(`diskutil umount ${partition.identifier}`)
             console.log(`unmounted ${partition.identifier}`);
             if(await file_exists(partition.mount_path)){
                 if(partition.is_mount_path_self_created){
                     console.log("removing path");
-                    await asyncSudoExec(`rm -f ${partition.identifier}`,{name:"mounter"})
+                    await asyncSudoExec(`rm -f ${partition.identifier}`)
                 }
             }
         }
