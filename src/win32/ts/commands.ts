@@ -8,7 +8,7 @@ const asyncExec = util.promisify(cmd.exec);
 const asyncSudoExec = async (command) => util.promisify(sudo.exec)(command,{name:"mounter"})
 // process.title = "mounter"
 
-import { Disk, Partition, Diskutil_info } from "../types/Diskutil"
+import { Disk, Partition } from "../types/Diskutil"
 
 // function parse_diskutil_list(stdout:string):Disk[]{
 //     let res = stdout.split(/\n\n/).slice(0,-1);
@@ -130,53 +130,78 @@ async function file_exists(path:string){
     return ((await asyncExec(`test -e ${path} && echo 1 || echo 0`)).stdout.trim() == '1')
 }
 
-function multiline_echo(multiline:string, splitter=/(\n|&{1,2})/){
-    // return "(" + multiline.split(splitter).map((str)=>"echo " + str.trim()).reduce((prev,curr)=>prev + " & echo. & " + curr) + ")"
-    return "(" + multiline.split(splitter).map((str)=>"echo " + str.trim()).join(" & echo. & ") + ")"
+function multiline_echo_command(multiline:string|string[], splitter=/\n/){
+    return "(" + (multiline instanceof Array? multiline :multiline.split(splitter)).map((str)=>"echo " + str.trim()).join(" & echo. & ") + ")"
 }
 
-async function exec_diskpart(command:string){
-    return asyncSudoExec(`${multiline_echo(command)} | diskpart`)
+async function exec_diskpart(command:string|string[]){
+    const getRelevent = (stdout:string):string[] => {        
+        let indexes:number[] = [];
+        let lines = stdout.split(/\n/);
+        lines.forEach((line,index)=>{
+            if(line.match(/DISKPART>/)) indexes.push(indexes.length%2===0?index+1:index);
+        })
+        if(indexes.length%2!=0) throw "failed commands"
+        let index_pairs:[number,number][] = []
+        for(let i =0 ; i<indexes.length; i+=2){
+            index_pairs.push([indexes[i],indexes[i+1]])
+        }
+        let sections = index_pairs.map((pair)=>lines.slice(...pair).join("\n"))
+        return sections;
+    }
+
+    return getRelevent(await asyncSudoExec(`${multiline_echo_command(command)} | diskpart`))
 }
 
 export async function list_disks(){
-    // console.log(await exec_diskpart("list disk"));
-    parse_list_disks(await exec_diskpart("list disk"));
-    // parse_list_disks("");
-}
-
-function parse_list_disks(stdout:string){
-    // let table = stdout.replace(/\n/," ").match(/DISKPART>/)
-    let indexes:number[] = [];
-    let lines = stdout.split(/\n/);
-    lines.forEach((line,index)=>{
-        if(line.match(/DISKPART>/)) indexes.push(indexes.length==0?index+1:index);
+    let disks:Disk[] = parse_table_section((await exec_diskpart(["list disk"]))[0])
+    let script = disks.map(disk=>[`select ${disk.Disk}`,"list partition"]).reduce((prev,curr)=>[...prev,...curr],[]);
+    let all_partitions:Partition[][] = (await exec_diskpart(script)).filter((_section,index)=>index%2!==0).map(section=>parse_table_section(section))
+    all_partitions.forEach((partitions,index)=>{
+        disks[index].partitions = partitions;
     })
-    let table = lines.slice(...indexes)
-    table.splice(1,1)
-    let columns = table.splice(0,1)[0]
-    let splitters = []
-    let attr = ["Disk","Status","Size","Free","Dyn","Gpt"]
-    
-    attr.forEach(x=>splitters.push(columns.search(x)))
-    splitters.push(columns.length)
+    console.log(disks);
 
-    let disks = table.map((line)=>{
-        let disk = { "Disk": undefined ,"Status" : undefined ,"Size" : undefined ,"Free" : undefined ,"Dyn": undefined ,"Gpt": undefined }
-        attr.forEach((a,index)=>{
-            let val = line.slice(splitters[index],splitters[index+1]).trim()
-            disk[a] = val!==""? val : undefined
-        })
-        return disk
-    }).filter((disk)=>disk.Disk)
-
-    console.log("disks:" ,disks);
-    console.log(splitters);
-    console.log(table);
-
-    /////////////////////////////////////////////////////////////////////////////////////////////////select disk; list partition////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    // parse_detail((await exec_diskpart(["select disk 1","select partition 1","detail partition"]))[2])
 }
 
+function is_table(table_section:string){
+    return table_section.split("\n")[1].match(/^[ -]*$/)!==null
+}
+
+function parse_table(section:string){
+    if(is_table) { return parse_table_section(section)}
+    else { return { fail: section } }
+}
+
+function parse_table_section(section:string){
+    let lines = section.split("\n")
+    let attributes = lines[0].match(/[A-Z][a-z]*/g)
+    let deviders = attributes.map((col)=>lines[0].search(col))
+    deviders.push(lines[0].length)
+    lines.splice(0,2)
+    let devider_pairs:[number,number][] = []
+    for(let i=1; i<deviders.length; i++){
+        devider_pairs.push([deviders[i-1],deviders[i]]);
+    }
+    if(devider_pairs.length !== attributes.length) throw "parse table section aint working"
+    let table = lines.map((line)=>devider_pairs.map(([x,y])=>line.slice(x,y)))
+    return table.map((row)=>{
+        let obj = {};
+        row.forEach((val,i)=>{
+            if (val.trim()!=="")
+                obj[attributes[i]]=val.trim()
+        })
+        return obj
+    }).filter(item=>Object.keys(item).length!=0)
+}
+
+function parse_detail(section:string){
+    let lines = section.split("\n");
+    let empty_line_indexes = lines.reduce((prev,curr,index)=>curr.match(/^\s*$/)?[...prev,index]:prev,[])
+    let [detail, table] = [lines.slice(0,empty_line_indexes[0]).join("\n"),lines.slice(empty_line_indexes[0]+1,empty_line_indexes[1]?empty_line_indexes[1]:lines.length).join("\n")]
+
+}
 
 
 // export async function mount_partition(partition:Partition, mount_path:string=undefined):Promise<Partition>{

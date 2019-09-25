@@ -1,6 +1,6 @@
 import '../../assets/css/bulma.scss'
 import React, { useState, useEffect } from 'react'
-import Disk from "./Disk"
+// import Disk from "./Disk"
 
 // import url from "../assets/images/electron-react-webpack-boilerplate.png"
 import { Disk as DiskInterface, Partition } from '../types/Diskutil'
