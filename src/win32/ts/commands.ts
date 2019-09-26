@@ -8,7 +8,7 @@ const asyncExec = util.promisify(cmd.exec);
 const asyncSudoExec = async (command) => util.promisify(sudo.exec)(command,{name:"mounter"})
 // process.title = "mounter"
 
-import { Disk, Partition } from "../types/Diskutil"
+import { Disk, Dict, Detail, PartitionDetail, PartitionTable, Partition, ParsedDetail } from "../types/Diskutil"
 
 // function parse_diskutil_list(stdout:string):Disk[]{
 //     let res = stdout.split(/\n\n/).slice(0,-1);
@@ -160,25 +160,97 @@ export async function list_disks(){
     all_partitions.forEach((partitions,index)=>{
         disks[index].partitions = partitions;
     })
-    console.log(disks);
 
-    // parse_detail((await exec_diskpart(["select disk 1","select partition 1","detail partition"]))[2])
+    return disks;
+}
+
+function combine_array_reducer(prev,curr){return [...prev,...curr]}
+
+export async function update_all_partitions(disks:Disk[]){
+    let script:string[] = disks.map(disk=>disk.partitions.map(partition=>[`select ${disk.Disk}`,`select ${partition.Partition}`,`detail partition`])).reduce(combine_array_reducer,[]).reduce(combine_array_reducer,[])
+    let sections = (await exec_diskpart(script)).filter((_,index)=>index%3==2)    
+    let partitions = sections.map(section=>detail_to_partition(parse_detail(section)))
+    let partition_counts = disks.map(disk=>disk.partitions.length)
+    let deviders:[number,number][] = [];
+    let prev = 0
+    partition_counts.forEach((number,index)=>{
+        let next = prev + partition_counts[index]
+        deviders.push([prev,next])
+        prev = next
+    })
+    if(deviders.length !== disks.length) throw "update all partitions not working"
+    let partitions_by_disk = deviders.map(([x,y])=>partitions.slice(x,y))
+    let copy = [...disks]
+    copy.forEach((disk,i)=>disk.partitions.forEach((partition,j)=>copy[i].partitions[j]={...partition,...partitions_by_disk[i][j]}))
+    return copy    
+}
+
+export async function update_partition(disk:Disk,partition_index?:number){
+    let script:string[]
+    if(partition_index){
+        script = [`select ${disk.Disk}`,`select ${disk.partitions[partition_index].Partition}`,`detail partition`]
+    }
+    else{
+        script = disk.partitions.map(partition=>[`select ${disk.Disk}`,`select ${partition.Partition}`,`detail partition`]).reduce(combine_array_reducer,[])
+    }
+    let sections = (await exec_diskpart(script)).filter((_,index)=>index%3==2)    
+    let partitions = sections.map(section=>detail_to_partition(parse_detail(section)))
+    let copy:Disk = {...disk}
+    if(partition_index){
+        copy.partitions[partition_index] = {...copy.partitions[partition_index],...partitions[0]}
+    } else {
+        copy.partitions.forEach((partition,i)=>copy.partitions[i] = {...copy.partitions[i], ...partitions[i]})
+    }
+    return copy    
+}
+
+export async function update_disk(disk:Disk){
+    return {...disk,...detail_to_disk(parse_detail(await exec_diskpart([`select ${disk.Disk}`, "detail disk"])[1]))}
+}
+
+export async function update_all_disk(disks:Disk[]){
+    let script:string[] = disks.map(disk=>[`select ${disk.Disk}`, "detail disk"]).reduce(combine_array_reducer,[])
+    let sections = (await exec_diskpart(script)).filter((_,index)=>index%2==1)
+    let parsed = sections.map(section=>detail_to_disk(parse_detail(section)))
+    let copy = [...disks]
+    if(parsed.length!==copy.length) throw "update all disks not working"
+    copy.forEach((disk,index)=>copy[index]={...copy[index],...parsed[index]})
+    return copy
+}
+
+export async function update_all(disks:Disk[]){
+    let script_disks:string[] = disks.map(disk=>[`select ${disk.Disk}`, "detail disk"]).reduce(combine_array_reducer,[])
+    let script_partitions:string[] = disks.map(disk=>disk.partitions.map(partition=>[`select ${disk.Disk}`,`select ${partition.Partition}`,`detail partition`])).reduce(combine_array_reducer,[]).reduce(combine_array_reducer,[])
+    let sections = await exec_diskpart([...script_disks,...script_partitions])
+    let [disk_sections,partition_sections] = [sections.slice(0,script_disks.length).filter((_,index)=>index%2==1), sections.slice(script_disks.length).filter((_,index)=>index%3==2) ]
+    let [parsed_disks,parsed_partitions] = [disk_sections.map(section=>detail_to_disk(parse_detail(section))), partition_sections.map(section=>detail_to_partition(parse_detail(section)))]
+    let partition_counts = disks.map(disk=>disk.partitions.length)
+    let deviders:[number,number][] = [];
+    let prev = 0
+    partition_counts.forEach((number,index)=>{
+        let next = prev + partition_counts[index]
+        deviders.push([prev,next])
+        prev = next
+    })
+    if(deviders.length !== disks.length) throw "update all partitions not working"
+    let partitions_by_disk = deviders.map(([x,y])=>parsed_partitions.slice(x,y))
+    let copy = [...disks]
+    copy.forEach((disk,i)=>copy[i]={...copy[i],...parsed_disks[i]})
+    copy.forEach((disk,i)=>disk.partitions.forEach((partition,j)=>copy[i].partitions[j]={...partition,...partitions_by_disk[i][j]}))
+    console.log(copy);
+    return copy    
 }
 
 function is_table(table_section:string){
-    return table_section.split("\n")[1].match(/^[ -]*$/)!==null
+    let lines = table_section.split("\n")
+    return lines.length>=2 && lines[1].match(/[ ]*-+[ ]*/)!==null
 }
 
-function parse_table(section:string){
-    if(is_table) { return parse_table_section(section)}
-    else { return { fail: section } }
-}
-
-function parse_table_section(section:string){
+function parse_table_section(section:string):Dict[]{
     let lines = section.split("\n")
     let attributes = lines[0].match(/[A-Z][a-z]*/g)
     let deviders = attributes.map((col)=>lines[0].search(col))
-    deviders.push(lines[0].length)
+    deviders.push(lines[1].length)
     lines.splice(0,2)
     let devider_pairs:[number,number][] = []
     for(let i=1; i<deviders.length; i++){
@@ -196,11 +268,37 @@ function parse_table_section(section:string){
     }).filter(item=>Object.keys(item).length!=0)
 }
 
-function parse_detail(section:string){
+function parse_detail_section(section:string):Detail{
+    let lines = section.split(/\n/)
+    let Title = lines[0].trim();
+    let obj = {};
+    lines.map(line=>line.split(/[ ]*:[ ]*/)).filter(line=>!(line.length<2)).forEach(([key,val])=>obj[key]=val)
+    return {Title,...obj}
+}
+
+function parse_detail(section:string):ParsedDetail{
     let lines = section.split("\n");
     let empty_line_indexes = lines.reduce((prev,curr,index)=>curr.match(/^\s*$/)?[...prev,index]:prev,[])
-    let [detail, table] = [lines.slice(0,empty_line_indexes[0]).join("\n"),lines.slice(empty_line_indexes[0]+1,empty_line_indexes[1]?empty_line_indexes[1]:lines.length).join("\n")]
+    let detail = lines.slice(0,empty_line_indexes[0]).join("\n")
+    let table = lines.slice(empty_line_indexes[0]+1,empty_line_indexes[1]?empty_line_indexes[1]:lines.length).join("\n");
+    return {detail:parse_detail_section(detail),...(is_table(table)?{table:parse_table_section(table)}:{_error:table})}
+}
 
+function detail_to_partition(parsed:ParsedDetail):Partition{
+    let detail:PartitionDetail = parsed.detail
+    let table:PartitionTable = parsed.table ? parsed.table[0] : undefined
+    let res:Partition & { [key:string]:any } = {...detail}
+    res.Mountable = !!table
+    if(res.Type) {res.UUID = res.Type; delete res.Type}
+    if(res.Title) { delete res.Title}
+    if(table) {
+        Object.keys(table).filter(key=>!["Volume","Type"].includes(key)).forEach(key=>res[key]=table[key])
+    }
+    return res;
+}
+
+function detail_to_disk(parsed:ParsedDetail):Disk{
+    return parsed.detail;
 }
 
 
