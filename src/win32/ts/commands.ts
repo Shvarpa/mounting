@@ -10,121 +10,6 @@ const asyncSudoExec = async (command) => util.promisify(sudo.exec)(command,{name
 
 import { Disk, Dict, Detail, PartitionDetail, PartitionTable, Partition, ParsedDetail } from "../types/Diskutil"
 
-// function parse_diskutil_list(stdout:string):Disk[]{
-//     let res = stdout.split(/\n\n/).slice(0,-1);
-//     let disks = res.map((entry)=>{
-//         let lines = entry.split(/\n/);
-//         const diskinfo = lines.splice(0,1)[0].match(/(.*)\s(\(.*)/)
-//         // console.log("disk info:", diskinfo);
-        
-//         let disk: Disk = {
-//             identifier: diskinfo[1],
-//             description: diskinfo[2].slice(0,-1),
-//             size: undefined,
-//             name: undefined,
-//             partitions: []
-//         }
-
-//         let deviders = []
-//         deviders.push(0);
-//         deviders.push(lines[0].search("#:")+2);
-//         deviders.push(lines[0].search("TYPE")+4);
-//         deviders.push(lines[0].search("SIZE")-1);
-//         deviders.push(lines[0].search("IDENTIFIER")-1);
-//         deviders.push(lines[0].length);
-        
-//         let columns = ["id", "type", "name", "size", "identifier"]
-        
-//         let last_partition_index;
-//         lines.slice(1).forEach((line,_index)=>{
-//             let partition: Partition = { id: "", type: "", name: "", size: "", identifier: "" }
-//             columns.forEach((column,index)=>{
-//                 partition[column] = line.slice(deviders[index],deviders[index+1]).trim()
-//             })
-//             Object.keys(partition).forEach(key => {
-//                 if(partition[key]==="") delete partition[key]
-//             });            
-//             if(!partition.id && last_partition_index){
-//                 disk.partitions[last_partition_index].name = partition.name;
-//             }
-//             else{
-//                 if(partition.id.endsWith(":"))
-//                     partition.id=partition.id.slice(0,partition.id.length-1);
-//                 if(partition.identifier) 
-//                     partition.identifier = "/dev/" + partition.identifier;
-//                 last_partition_index = partition.id;
-//                 disk.partitions[partition.id]=partition;
-//             }
-//         })
-//         if(disk.partitions.length >= 1 && disk.partitions[0].id == "0"){            
-//             let disk_partition = disk.partitions.splice(0,1)[0]
-//             disk.size = disk_partition.size.replace(/^[*+-\\]/,"");
-//             disk.name = disk_partition.name;
-//         }
-//         return disk
-//     });
-
-//     return disks;
-// }
-
-// function parse_diskutil_info(stdout):Diskutil_info{
-//     let parsed = {}
-//     stdout.split(/\n/).forEach(line => {
-//         let match = line.match(/(?<key>.*):(?<val>.*)/)
-//         if(match){
-//             let key = match.groups.key.trim()
-//             let val = match.groups.val.trim()            
-//             if(['Mounted','OS Can Be Installed','Read-Only Media','Read-Only Volume'].includes(key)){                               
-//                 parsed[key] = ( val.search("Y|y")>=0 ? true : false)
-//             }
-//             else{
-//                 parsed[key] = val;
-//             }
-//         }
-//     });        
-//     return parsed;
-// }
-
-// export async function update_partition(partition:Partition){
-//     let {stdout} = await asyncExec(`diskutil info ${partition.identifier}`);
-//     let parsed = parse_diskutil_info(stdout)
-    
-    
-//     let combined:Partition = {...partition}
-
-//     const copy = (from:string, to:string, def=combined[to]) => {
-//         combined[to] = parsed[from]!==undefined? parsed[from]: def;
-//     }
-
-//     if(!parsed["Volume Name"].match(/^[nN]ot/))
-//         copy("Volume Name", "name");
-//     copy("Mounted", "is_mounted")
-//     copy("Mount Point", "mount_path")
-//     copy("Type (Bundle)", "filesystem")
-//     copy("Device Node", "identifier")
-    
-//     return combined
-// }
-
-// export async function update_disk(disk:Disk){
-//     let {stdout} = await asyncExec(`diskutil info ${disk.identifier}`);
-//     let parsed = parse_diskutil_info(stdout)
-    
-    
-//     let combined:Disk = {...disk}
-
-//     // const copy = (from:string, to:string, def=combined[to]) => {
-//     //     let exist = parsed[from]!==undefined
-//     //     combined[to] = exist? parsed[from]: def;
-//     //     return exist;
-//     // }
-
-//     if(parsed["Disk Size"]!==undefined){
-//         combined.size = parsed["Disk Size"].match(/(?<size>^.* [A-Z][Bb]) /).groups.size
-//     }
-
-//     return combined
-// }
 
 async function file_exists(path:string){
     return ((await asyncExec(`test -e ${path} && echo 1 || echo 0`)).stdout.trim() == '1')
@@ -151,94 +36,6 @@ async function exec_diskpart(command:string|string[]){
     }
 
     return getRelevent(await asyncSudoExec(`${multiline_echo_command(command)} | diskpart`))
-}
-
-export async function list_disks(){
-    let disks:Disk[] = parse_table_section((await exec_diskpart(["list disk"]))[0])
-    let script = disks.map(disk=>[`select ${disk.Disk}`,"list partition"]).reduce((prev,curr)=>[...prev,...curr],[]);
-    let all_partitions:Partition[][] = (await exec_diskpart(script)).filter((_section,index)=>index%2!==0).map(section=>parse_table_section(section))
-    all_partitions.forEach((partitions,index)=>{
-        disks[index].partitions = partitions;
-    })
-
-    return disks;
-}
-
-function combine_array_reducer(prev,curr){return [...prev,...curr]}
-
-export async function update_all_partitions(disks:Disk[]){
-    let script:string[] = disks.map(disk=>disk.partitions.map(partition=>[`select ${disk.Disk}`,`select ${partition.Partition}`,`detail partition`])).reduce(combine_array_reducer,[]).reduce(combine_array_reducer,[])
-    let sections = (await exec_diskpart(script)).filter((_,index)=>index%3==2)    
-    let partitions = sections.map(section=>detail_to_partition(parse_detail(section)))
-    let partition_counts = disks.map(disk=>disk.partitions.length)
-    let deviders:[number,number][] = [];
-    let prev = 0
-    partition_counts.forEach((number,index)=>{
-        let next = prev + partition_counts[index]
-        deviders.push([prev,next])
-        prev = next
-    })
-    if(deviders.length !== disks.length) throw "update all partitions not working"
-    let partitions_by_disk = deviders.map(([x,y])=>partitions.slice(x,y))
-    let copy = [...disks]
-    copy.forEach((disk,i)=>disk.partitions.forEach((partition,j)=>copy[i].partitions[j]={...partition,...partitions_by_disk[i][j]}))
-    return copy    
-}
-
-export async function update_partition(disk:Disk,partition_index?:number){
-    let script:string[]
-    if(partition_index){
-        script = [`select ${disk.Disk}`,`select ${disk.partitions[partition_index].Partition}`,`detail partition`]
-    }
-    else{
-        script = disk.partitions.map(partition=>[`select ${disk.Disk}`,`select ${partition.Partition}`,`detail partition`]).reduce(combine_array_reducer,[])
-    }
-    let sections = (await exec_diskpart(script)).filter((_,index)=>index%3==2)    
-    let partitions = sections.map(section=>detail_to_partition(parse_detail(section)))
-    let copy:Disk = {...disk}
-    if(partition_index){
-        copy.partitions[partition_index] = {...copy.partitions[partition_index],...partitions[0]}
-    } else {
-        copy.partitions.forEach((partition,i)=>copy.partitions[i] = {...copy.partitions[i], ...partitions[i]})
-    }
-    return copy    
-}
-
-export async function update_disk(disk:Disk){
-    return {...disk,...detail_to_disk(parse_detail(await exec_diskpart([`select ${disk.Disk}`, "detail disk"])[1]))}
-}
-
-export async function update_all_disk(disks:Disk[]){
-    let script:string[] = disks.map(disk=>[`select ${disk.Disk}`, "detail disk"]).reduce(combine_array_reducer,[])
-    let sections = (await exec_diskpart(script)).filter((_,index)=>index%2==1)
-    let parsed = sections.map(section=>detail_to_disk(parse_detail(section)))
-    let copy = [...disks]
-    if(parsed.length!==copy.length) throw "update all disks not working"
-    copy.forEach((disk,index)=>copy[index]={...copy[index],...parsed[index]})
-    return copy
-}
-
-export async function update_all(disks:Disk[]){
-    let script_disks:string[] = disks.map(disk=>[`select ${disk.Disk}`, "detail disk"]).reduce(combine_array_reducer,[])
-    let script_partitions:string[] = disks.map(disk=>disk.partitions.map(partition=>[`select ${disk.Disk}`,`select ${partition.Partition}`,`detail partition`])).reduce(combine_array_reducer,[]).reduce(combine_array_reducer,[])
-    let sections = await exec_diskpart([...script_disks,...script_partitions])
-    let [disk_sections,partition_sections] = [sections.slice(0,script_disks.length).filter((_,index)=>index%2==1), sections.slice(script_disks.length).filter((_,index)=>index%3==2) ]
-    let [parsed_disks,parsed_partitions] = [disk_sections.map(section=>detail_to_disk(parse_detail(section))), partition_sections.map(section=>detail_to_partition(parse_detail(section)))]
-    let partition_counts = disks.map(disk=>disk.partitions.length)
-    let deviders:[number,number][] = [];
-    let prev = 0
-    partition_counts.forEach((number,index)=>{
-        let next = prev + partition_counts[index]
-        deviders.push([prev,next])
-        prev = next
-    })
-    if(deviders.length !== disks.length) throw "update all partitions not working"
-    let partitions_by_disk = deviders.map(([x,y])=>parsed_partitions.slice(x,y))
-    let copy = [...disks]
-    copy.forEach((disk,i)=>copy[i]={...copy[i],...parsed_disks[i]})
-    copy.forEach((disk,i)=>disk.partitions.forEach((partition,j)=>copy[i].partitions[j]={...partition,...partitions_by_disk[i][j]}))
-    console.log(copy);
-    return copy    
 }
 
 function is_table(table_section:string){
@@ -301,69 +98,125 @@ function detail_to_disk(parsed:ParsedDetail):Disk{
     return parsed.detail;
 }
 
+export async function list_disks(){
+    let disks:Disk[] = parse_table_section((await exec_diskpart(["list disk"]))[0])
+    let script = disks.map(disk=>[`select ${disk.Disk}`,"list partition"]).reduce((prev,curr)=>[...prev,...curr],[]);
+    let all_partitions:Partition[][] = (await exec_diskpart(script)).filter((_section,index)=>index%2!==0).map(section=>parse_table_section(section))
+    all_partitions.forEach((partitions,index)=>{
+        disks[index].partitions = partitions;
+    })
 
-// export async function mount_partition(partition:Partition, mount_path:string=undefined):Promise<Partition>{
-//     if(mount_path===undefined){
-//         if(partition.name){
-//             mount_path=`/Users/pavel/Desktop/Volumes/${partition.name}`
-//         }
-//         else {
-//             mount_path=`/Users/pavel/Desktop/Volumes/${partition.identifier.match(/^(\/dev\/|)(?<name>.*)/).groups.name}`
-//         }
-//     }
-//     if (!partition.is_mounted){
-//         if (!await file_exists(mount_path)) {
-//             await asyncExec(`mkdir -p ${mount_path}`)
-//             console.log(`created ${mount_path}`);
-//         }        
-//         try{
-//             await asyncSudoExec(`mount -t ${partition.filesystem} ${partition.identifier} ${mount_path}`)
-//             console.log(`mounted ${partition.identifier} in ${mount_path}`);
-//         }
-//         catch (err){
-//             console.log(err);
-//         }
-//     }
-//     return update_partition(partition)
-// }
+    return disks;
+}
 
-// export async function unmount_partition(partition: Partition){
-//     if(partition.is_mounted){
-//         try{
-//             await asyncSudoExec(`diskutil umount ${partition.identifier}`)
-//             console.log(`unmounted ${partition.identifier}`);
-//             if(await file_exists(partition.mount_path)){
-//                 if(partition.is_mount_path_self_created){
-//                     console.log("removing path");
-//                     await asyncSudoExec(`rm -f ${partition.identifier}`)
-//                 }
-//             }
-//         }
-//         catch(err){
-//             console.log(err);
-//         }
-//         return await update_partition(partition);
-//     }    
-//     else
-//         return partition;
-// }
+function combine_array_reducer(prev,curr){return [...prev,...curr]}
 
-// export async function toggle_mount_partition(partition:Partition){
-//     if(partition.is_mounted){
-//         return await unmount_partition(partition)
-//     }
-//     else {
-//         return await mount_partition(partition)
-//     }
-// }
+export async function update_partition(disk:Disk,partition_index?:number){
+    let script:string[]
+    if(partition_index){
+        script = [`select ${disk.Disk}`,`select ${disk.partitions[partition_index].Partition}`,`detail partition`]
+    }
+    else{
+        script = disk.partitions.map(partition=>[`select ${disk.Disk}`,`select ${partition.Partition}`,`detail partition`]).reduce(combine_array_reducer,[])
+    }
+    let sections = (await exec_diskpart(script)).filter((_,index)=>index%3==2)    
+    let partitions = sections.map(section=>detail_to_partition(parse_detail(section)))
+    let copy:Disk = {...disk}
+    if(partition_index){
+        copy.partitions[partition_index] = {...copy.partitions[partition_index],...partitions[0]}
+    } else {
+        copy.partitions.forEach((partition,i)=>copy.partitions[i] = {...copy.partitions[i], ...partitions[i]})
+    }
+    return copy    
+}
+
+export async function update_all_partitions(disks:Disk[]){
+    let script:string[] = disks.map(disk=>disk.partitions.map(partition=>[`select ${disk.Disk}`,`select ${partition.Partition}`,`detail partition`])).reduce(combine_array_reducer,[]).reduce(combine_array_reducer,[])
+    let sections = (await exec_diskpart(script)).filter((_,index)=>index%3==2)    
+    let partitions = sections.map(section=>detail_to_partition(parse_detail(section)))
+    let partition_counts = disks.map(disk=>disk.partitions.length)
+    let deviders:[number,number][] = [];
+    let prev = 0
+    partition_counts.forEach((number,index)=>{
+        let next = prev + partition_counts[index]
+        deviders.push([prev,next])
+        prev = next
+    })
+    if(deviders.length !== disks.length) throw "update all partitions not working"
+    let partitions_by_disk = deviders.map(([x,y])=>partitions.slice(x,y))
+    let copy = [...disks]
+    copy.forEach((disk,i)=>disk.partitions.forEach((partition,j)=>copy[i].partitions[j]={...partition,...partitions_by_disk[i][j]}))
+    return copy    
+}
+
+export async function update_disk(disk:Disk){
+    return {...disk,...detail_to_disk(parse_detail(await exec_diskpart([`select ${disk.Disk}`, "detail disk"])[1]))}
+}
+
+export async function update_all_disk(disks:Disk[]){
+    let script:string[] = disks.map(disk=>[`select ${disk.Disk}`, "detail disk"]).reduce(combine_array_reducer,[])
+    let sections = (await exec_diskpart(script)).filter((_,index)=>index%2==1)
+    let parsed = sections.map(section=>detail_to_disk(parse_detail(section)))
+    let copy = [...disks]
+    if(parsed.length!==copy.length) throw "update all disks not working"
+    copy.forEach((disk,index)=>copy[index]={...copy[index],...parsed[index]})
+    return copy
+}
+
+export async function update_all(disks:Disk[]){
+    let script_disks:string[] = disks.map(disk=>[`select ${disk.Disk}`, "detail disk"]).reduce(combine_array_reducer,[])
+    let script_partitions:string[] = disks.map(disk=>disk.partitions.map(partition=>[`select ${disk.Disk}`,`select ${partition.Partition}`,`detail partition`])).reduce(combine_array_reducer,[]).reduce(combine_array_reducer,[])    
+    let sections = await exec_diskpart([...script_disks,...script_partitions])
+    let [disk_sections,partition_sections] = [sections.slice(0,script_disks.length).filter((_,index)=>index%2==1), sections.slice(script_disks.length).filter((_,index)=>index%3==2) ]
+    let [parsed_disks,parsed_partitions] = [disk_sections.map(section=>detail_to_disk(parse_detail(section))), partition_sections.map(section=>detail_to_partition(parse_detail(section)))]
+    let partition_counts = disks.map(disk=>disk.partitions.length)
+    let deviders:[number,number][] = [];
+    let prev = 0
+    partition_counts.forEach((number,index)=>{
+        let next = prev + partition_counts[index]
+        deviders.push([prev,next])
+        prev = next
+    })    
+    if(deviders.length !== disks.length) throw "update all partitions not working"
+    let partitions_by_disk = deviders.map(([x,y])=>parsed_partitions.slice(x,y))
+    let copy = [...disks]
+    copy.forEach((disk,i)=>copy[i]={...copy[i],...parsed_disks[i]})
+    copy.forEach((disk,i)=>disk.partitions.forEach((partition,j)=>copy[i].partitions[j]={...partition,...partitions_by_disk[i][j]}))
+    console.log(copy);
+    return copy    
+}
+
+export async function mount_partition(disk:Disk, partition_index:number, letter?:string) {
+    let partition = disk.partitions[partition_index]
+    if(partition.Mountable && !partition.Ltr){
+        console.log((await exec_diskpart([`select ${disk.Disk}`, `select ${partition.Partition}`, `assign ${ letter ? `${letter}:` : ""}`]))[2].trim())
+    }
+    return update_partition(disk,partition_index)
+}
+
+export async function unmount_partition(disk:Disk, partition_index:number) {
+    let partition = disk.partitions[partition_index]
+    if(partition.Mountable && partition.Ltr){
+        console.log((await exec_diskpart([`select ${disk.Disk}`, `select ${partition.Partition}`, `remove`])[2]));
+    }
+    return update_partition(disk,partition_index)
+}
+
+export async function toggle_mount_partition(disk:Disk, partition_index:number) {
+    return disk.partitions[partition_index].Ltr ? unmount_partition(disk,partition_index) : mount_partition(disk, partition_index)
+}
+
 
 export default {
     list_disks,
-    // update_disk,
-    // update_partition,
-    // mount_partition,
-    // unmount_partition,
-    // toggle_mount_partition
+    update_disk,
+    update_all_disk,
+    update_partition,
+    update_all_partitions,
+    update_all,
+    mount_partition,
+    unmount_partition,
+    toggle_mount_partition
 }
 
 // main();

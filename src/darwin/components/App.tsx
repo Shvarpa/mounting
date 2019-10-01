@@ -4,11 +4,11 @@ import Disk from "./Disk"
 
 // import url from "../assets/images/electron-react-webpack-boilerplate.png"
 import { Disk as DiskInterface, Partition } from '../types/Diskutil'
-import AppState from "../ts/AppState"
+import Actions from "../ts/actions"
 const App = (props) => {
   let default_state: DiskInterface[] = []
   const [disks, setDisks] = useState(default_state)
-  const [actions, {startup}] = AppState([disks,setDisks])
+  const [actions, {startup}] = Actions([disks,setDisks])
 
   useEffect(()=>{startup()},[])
 
