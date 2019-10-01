@@ -58,11 +58,11 @@ function parse_table_section(section:string):Dict[]{
     return table.map((row)=>{
         let obj = {};
         row.forEach((val,i)=>{
-            if (val.trim()!=="")
-                obj[attributes[i]]=val.trim()
+            let value = val.trim()
+            obj[attributes[i]]= value=="" ? undefined : value
         })
         return obj
-    }).filter(item=>Object.keys(item).length!=0)
+    }).filter(item=>Object.entries(item).map(entry=>entry[1]).filter(val=>val!=undefined).length!=0)
 }
 
 function parse_detail_section(section:string):Detail{
