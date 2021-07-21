@@ -1,31 +1,41 @@
 {
   "name": "mounter",
   "version": "1.0.0",
-  "main": "src/index.ts",
+  "main": "main.js",
   "license": "MIT",
+  "author": {
+    "name": "Pavel Shvarchov",
+    "email": "Shvarpa@gmail.com",
+    "url": "https://github.com/shvarpa"
+  },
   "scripts": {
-    "build": "webpack -p",
-    "start": "webpack && qode ./dist/index.js",
-    "debug": "webpack && qode --inspect ./dist/index.js",
-    "start:watch": "nodemon -e js,ts,tsx --ignore dist/ --ignore node_modules/ --exec npm start"
+    "prod": "webpack --mode production --config webpack.build.config.js && electron --noDevServer .",
+    "start": "webpack-dev-server --hot --host 0.0.0.0 --config=./webpack.dev.config.js --mode development",
+    "build": "webpack --config webpack.build.config.js --mode production",
+    "package": "yarn build",
+    "postpackage": "electron-packager ./ --out=builds/"
   },
   "devDependencies": {
     "@types/node": "^12.7.5",
     "@types/react": "^16.9.2",
+    "bulma": "^0.7.5",
+    "css-loader": "^3.2.0",
+    "electron": "^6.0.7",
+    "electron-packager": "^14.0.5",
     "file-loader": "^4.2.0",
-    "node-loader": "^0.6.0",
-    "nodemon": "^1.19.2",
+    "html-webpack-plugin": "^3.2.0",
+    "node-sass": "^4.12.0",
+    "sass-loader": "^8.0.0",
+    "style-loader": "^1.0.0",
     "ts-loader": "^6.1.0",
-    "ts-node": "^8.3.0",
     "typescript": "^3.6.3",
-    "webpack": "^4.40.2",
-    "webpack-cli": "^3.3.8"
+    "webpack": "^4.39.3",
+    "webpack-cli": "^3.3.7",
+    "webpack-dev-server": "^3.8.0"
   },
   "dependencies": {
-    "@nodegui/nodegui": "^0.1.9",
-    "@nodegui/qode": "^1.0.5",
-    "@nodegui/react-nodegui": "^0.1.9",
     "react": "^16.9.0",
+    "react-dom": "^16.9.0",
     "sudo-prompt": "^9.0.0"
   }
 }
